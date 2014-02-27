@@ -9,7 +9,8 @@ use URI::Escape;
 #### Hash of methods
 my %method_refs = ("audio.search" => \&audio_search,
        		   "messages.send" => \&messages_send,
-   		   "messages.get" => \&messages_get);
+   		   "messages.get" => \&messages_get,
+   		   "audio.getById" => \&audio_getById,);
 #print "method_refs:\n".{map {$_ => $method_refs{$_}} keys %method_refs};
 
 
@@ -66,7 +67,6 @@ sub request{
 	my $request = &{$method_refs{$request_name}}(@params);
 	open PIPE, "curl \'$request\' |" or die $!;
 	my $json_rslt = <PIPE>;
-	print $json_rslt, "\n";
 	return $json_rslt;
 }
 
@@ -75,8 +75,8 @@ sub request{
 
 sub audio_getById {
 	my $method_name = "audio.getById";
-	my $parameters = shift;
-	#### TODO
+	my $parameters = "audios=".shift;
+	return "https://api.vk.com/method/$method_name?$parameters$param_postfix"; 
 }
 
 #### Search Audio
