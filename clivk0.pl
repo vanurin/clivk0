@@ -13,6 +13,8 @@ my %method_refs = ("audio.search" => \&audio_search,
    		   "audio.getById" => \&audio_getById,);
 #print "method_refs:\n".{map {$_ => $method_refs{$_}} keys %method_refs};
 
+   ##### TODO add checking file existance before reading.
+   ##### TODO add checking internet connection before/after? request.
 
 #### Authorization
 ## Read from auth.conf and auth.token, try this token, in case of failure get a new one
@@ -30,34 +32,40 @@ close FH;
 #my $PERMISSIONS = 4096; 				#extended messages processing
 #my $REDIRECT_URI = 'https://oauth.vk.com/blank.html'; 	#standard filling for Standalone app
 #my $DISPLAY = 'mobile';					#view of request of authorization
-#my $API_VERSION = '5.5';				#version of requestion vk.com API
+#my $API_VERSION = '5.5';				#version of requested vk.com API
 #my $RESPONSE_TYPE = 'token'; 				#standard for Standalone app ('code' for server app)
 
 # Read old access token from auth.token
 open FH, "<auth.token" or die $!;
 my $access_token = <FH>;
-my $param_postfix = "&v=$API_VERSION&access_token=$access_token";
+my $param_postfix; 
 close FH;
+renew_postfix();
+sub renew_postfix {$param_postfix="&v=$API_VERSION&access_token=$access_token"};
 
 #####
-# trying simple request to determine if current access token is valid
-my $test_request_res = request("messages.get", "1", "0", "1");
-#print $test_request_res;
-#####
+##### Chech and request for new auth.token if needed.
+sub auth_test {
+	my $test_request_res = shift;
+	### TODO More precise check, with error code ({"error":{"error_code":10,"error_msg":"Internal server error: could not get application")
+	if ($test_request_res =~ m/error/) {	#if not valid --- ask for a new token and write it to auth.token.
+		my $auth_request = "https://oauth.vk.com/authorize?client_id=$APP_ID&scope=$PERMISSIONS&redirect_uri=$REDIRECT_URI&display=$DISPLAY&v=$API_VERSION&response_type=$RESPONSE_TYPE";
+		system("open", "-a", "Safari");
+		system("osascript", "-e", "tell application \"Safari\" to open location \"$auth_request\"");
+		#### Reading access_token from STDIN
+		print "\nEnter access_token, please:\n";
+		$access_token = (split /=|&/, <STDIN>)[1];
+		renew_postfix();
+		#### Saving token in auth.token
+		open FH, ">auth.token" or die $!;
+		print FH $access_token;
+		close FH;
 
-if ($test_request_res =~ m/error/) {	#if not valid --- ask for a new token and write it to auth.token.
-	my $auth_request = "https://oauth.vk.com/authorize?client_id=$APP_ID&scope=$PERMISSIONS&redirect_uri=$REDIRECT_URI&display=$DISPLAY&v=$API_VERSION&response_type=$RESPONSE_TYPE";
-	system("open", "-a", "Safari");
-	system("osascript", "-e", "tell application \"Safari\" to open location \"$auth_request\"");
-	#### Reading access_token from STDIN
-	print "\nEnter access_token, please:\n";
-	$access_token = (split /=|&/, <STDIN>)[1];
-	#### Saving token in auth.token
-	open FH, ">auth.token" or die $!;
-	print FH $access_token;
-	close FH;
+		# trying request to determine if current access token is valid
+		$test_request_res = request(@_);
+	}
+	return $test_request_res;
 }
-
 ###### Request from script arguments
 my $flag = shift @ARGV;
 # TODO switch here
@@ -71,13 +79,19 @@ if ($flag eq "-r") {
 	print "Unrecognized input. Run with --help for permitted arguments.\n";
 }
 ### Request subroutine
-sub request{
+sub request {
 	my $request_name = shift;
 	my @params =  map {uri_escape $_} @_;
+	# TODO validate request_name
 	my $request = &{$method_refs{$request_name}}(@params);
 	open PIPE, "curl \'$request\' |" or die $!;
-	my $json_rslt = <PIPE>;
-	return $json_rslt;
+	# Read and check if it is successful.
+	my $json_rslt = <PIPE>;	
+	close PIPE;
+	unshift @_, $request_name;
+	# Recursion here, auth_test() calls request() inside.
+	return auth_test($json_rslt, @_);
+
 }
 
 #### Request to Download Audio from audio.search results.
