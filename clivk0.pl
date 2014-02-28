@@ -59,8 +59,17 @@ if ($test_request_res =~ m/error/) {	#if not valid --- ask for a new token and w
 }
 
 ###### Request from script arguments
-#print json_formatSimple(request(@ARGV));
-download_audio_from_search_result(@ARGV);
+my $flag = shift @ARGV;
+# TODO switch here
+if ($flag eq "-r") {
+	print json_formatSimple(request(@ARGV));
+} elsif ($flag eq "-d") {
+	download_audio_from_search_result(@ARGV);
+} elsif ($flag eq "--help") {
+	print "Use -r argument to perform a request from vk.com API.\nThese methods are supported currently:\n", join(", ", (keys %method_refs)), "\nSee http://vk.com/dev/methods.\n";
+} else {
+	print "Unrecognized input. Run with --help for permitted arguments.\n";
+}
 ### Request subroutine
 sub request{
 	my $request_name = shift;
