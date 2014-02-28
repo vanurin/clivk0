@@ -59,7 +59,8 @@ if ($test_request_res =~ m/error/) {	#if not valid --- ask for a new token and w
 }
 
 ###### Request from script arguments
-print request(@ARGV);
+#print json_formatSimple(request(@ARGV));
+download_audio_from_search_result(@ARGV);
 ### Request subroutine
 sub request{
 	my $request_name = shift;
@@ -70,6 +71,33 @@ sub request{
 	return $json_rslt;
 }
 
+#### Request to Download Audio from audio.search results.
+# First param is an audio.search query (Track title and artist name.) and second param is a path for downloads.
+sub download_audio_from_search_result {
+	my $q = shift;
+	my $path = shift;
+	my $count = 1;			# A matter for future changes.
+	my $json_rslt = request("audio.search", "$q", "$count");
+	my @pairs = ($json_rslt =~ m/("\w+":".*?")/g);
+	foreach (@pairs) {
+		s/(?:^")|(?:"$)|(?:\?.*)//g;
+	}
+#	print join("\n", @pairs), "\n";
+	my %hash = map {split /":"/; } @pairs;
+	print join("\n", %hash), "\n";
+	print "Would you like to download this track to $path directory? (yes/no)\n";
+	my $answer = <STDIN>;
+	system("curl $hash{'url'} > '$path/$hash{artist} - $hash{title}.mp3'") if ($answer =~ /Yes|yes|y/);
+
+
+}
+
+#### Simple JSON format.
+sub json_formatSimple {
+	my $line = shift;
+	$line =~ s/([,\{\}\[\]])/$1\n/g;
+	return $line;
+}
 
 #### Get Audio by id
 
